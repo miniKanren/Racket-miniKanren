@@ -62,11 +62,18 @@
          ((fresh (x) g0 g ...
             (lambdag@ (final-a)
               (choice ((reify x) final-a) empty-f)))
+          empty-a))))
+    ((_ n (x ...) g0 g ...)
+     (take n
+       (lambdaf@ ()
+         ((fresh (x ...) g0 g ...
+            (lambdag@ (final-a)
+              (list ((reify x) final-a) ...)))
           empty-a))))))
 
 (define-syntax run*
   (syntax-rules ()
-    ((_ (x) g ...) (run #f (x) g ...))))
+    ((_ (x ...) g ...) (run #f (x ...) g ...))))
 
 (define-syntax fresh
   (syntax-rules ()
