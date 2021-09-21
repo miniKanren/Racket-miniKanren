@@ -115,10 +115,21 @@
     ((_ [else g0 g ...]) (conde [g0 g ...]))
     ((_ (g0 g ...) b ...)
      (lambdag@ (a)
-               (inc
-                (mplus*
-                 (bind* (g0 a) g ...)
-                 ((conde b ...) a)))))))
+       (inc
+        (mplus*
+         (bind* (g0 a) g ...)
+         ((conde b ...) a)))))))
+
+(define-syntax all
+  (syntax-rules ()
+    [(_) succeed]
+    [(_ g) g]
+    [(_ g0 g ...)
+     (let ([g^ g0])
+       (lambdag@ (s)
+         (bind (g^ s)
+               (lambdag@ (s)
+                 ((all g ...) s)))))]))
 
 (define-syntax bindi*
   (syntax-rules ()
@@ -137,7 +148,7 @@
   (lambda (a-inf f)
     (case-inf a-inf
       (() (f))
-      ((f^) (inc (mplusi (f) f^)))
+      ((f^) (inc (mplusi (f^) f)))
       ((a) (choice a f))
       ((a f^) (choice a (lambdaf@ () (mplusi (f) f^)))))))
 
@@ -158,6 +169,17 @@
          (mplusi*
            (bind* (g0 a) g ...)
            ((condi b ...) a)))))))
+
+(define-syntax alli
+  (syntax-rules ()
+    [(_) succeed]
+    [(_ g) g]
+    [(_ g0 g ...)
+     (let ([g^ g0])
+       (lambdag@ (s)
+         (bindi (g^ s)
+                (lambdag@ (s)
+                  ((alli g ...) s)))))]))
 
 
 (define pr-t->tag
