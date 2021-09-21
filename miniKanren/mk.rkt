@@ -21,7 +21,7 @@
 (define mzero (lambda () #f))
 (define unit (lambdag@ (a) a))
 (define choice (lambda (a f) (cons a f)))
-(define-syntax lambdaf@ 
+(define-syntax lambdaf@
   (syntax-rules () ((_ () e) (lambda () e))))
 
 (define-syntax inc
@@ -39,10 +39,15 @@
          ((not (and (pair? a-inf)
                  (procedure? (cdr a-inf))))
           (let ((a^ a-inf)) e2))
-         (else (let ((a (car a-inf)) (f (cdr a-inf))) 
+         (else (let ((a (car a-inf)) (f (cdr a-inf)))
                  e3)))))))
 (define take
   (lambda (n f)
+    (unless (or (false? n) (natural? n))
+      (raise-arguments-error 'take
+                             "n should be natural number or false."
+                             "n" n))
+
     (cond
       ((and n (zero? n)) '())
       (else
@@ -53,7 +58,7 @@
          ((a f) (cons a (take (and n (- n 1)) f))))))))
 
 (define empty-a '(() () ()))
-  
+
 (define-syntax run
   (syntax-rules ()
     ((_ n (x) g0 g ...)
@@ -84,33 +89,98 @@
 (define bind
   (lambda (a-inf g)
     (case-inf a-inf
-      (() (mzero))
-      ((f) (inc (bind (f) g)))
-      ((a) (g a))
-      ((a f) (mplus (g a) (lambdaf@ () (bind (f) g)))))))
+              (() (mzero))
+              ((f) (inc (bind (f) g)))
+              ((a) (g a))
+              ((a f) (mplus (g a) (lambdaf@ () (bind (f) g)))))))
 
 (define mplus
   (lambda (a-inf f)
     (case-inf a-inf
-      (() (f))
-      ((f^) (inc (mplus (f) f^)))
-      ((a) (choice a f))
-      ((a f^) (choice a (lambdaf@ () (mplus (f) f^)))))))
-
-(define-syntax conde
-  (syntax-rules ()
-    ((_ (g0 g ...) (g1 g^ ...) ...)
-     (lambdag@ (a) 
-       (inc 
-         (mplus* 
-           (bind* (g0 a) g ...)
-           (bind* (g1 a) g^ ...) ...))))))
+              (() (f))
+              ((f^) (inc (mplus (f^) f)))
+              ((a) (choice a f))
+              ((a f^) (choice a (lambdaf@ () (mplus (f^) f)))))))
 
 (define-syntax mplus*
   (syntax-rules ()
     ((_ e) e)
-    ((_ e0 e ...) (mplus e0 
-                    (lambdaf@ () (mplus* e ...))))))
+    ((_ e0 e ...) (mplus e0 (lambdaf@ () (mplus* e ...))))))
+
+(define-syntax conde
+  (syntax-rules ()
+    ((_) fail)
+    ((_ [g]) g)
+    ((_ [else g]) g)
+    ((_ [else g0 g ...]) (conde [g0 g ...]))
+    ((_ (g0 g ...) b ...)
+     (lambdag@ (a)
+       (inc
+        (mplus*
+         (bind* (g0 a) g ...)
+         ((conde b ...) a)))))))
+
+(define-syntax all
+  (syntax-rules ()
+    [(_) succeed]
+    [(_ g) g]
+    [(_ g0 g ...)
+     (let ([g^ g0])
+       (lambdag@ (s)
+         (bind (g^ s)
+               (lambdag@ (s)
+                 ((all g ...) s)))))]))
+
+(define-syntax bindi*
+  (syntax-rules ()
+    ((_ e) e)
+    ((_ e g0 g ...) (bindi* (bindi e g0) g ...))))
+
+(define bindi
+  (lambda (a-inf g)
+    (case-inf a-inf
+      (() (mzero))
+      ((f) (inc (bindi (f) g)))
+      ((a) (g a))
+      ((a f) (mplusi (g a) (lambdaf@ () (bindi (f) g)))))))
+
+(define mplusi
+  (lambda (a-inf f)
+    (case-inf a-inf
+      (() (f))
+      ((f^) (inc (mplusi (f^) f)))
+      ((a) (choice a f))
+      ((a f^) (choice a (lambdaf@ () (mplusi (f) f^)))))))
+
+(define-syntax mplusi*
+  (syntax-rules ()
+    ((_ e) e)
+    ((_ e0 e ...) (mplusi e0 (lambdaf@ () (mplusi* e ...))))))
+
+(define-syntax condi
+  (syntax-rules ()
+    ((_) fail)
+    ((_ [g]) g)
+    ((_ [else g]) g)
+    ((_ [else g0 g ...]) (condi [g0 g ...]))
+    ((_ (g0 g ...) b ...)
+     (lambdag@ (a)
+       (inc
+         (mplusi*
+           (bind* (g0 a) g ...)
+           ((condi b ...) a)))))))
+
+(define-syntax alli
+  (syntax-rules ()
+    [(_) succeed]
+    [(_ g) g]
+    [(_ g0 g ...)
+     (let ([g^ g0])
+       (lambdag@ (s)
+         (bindi (g^ s)
+                (lambdag@ (s)
+                  ((alli g ...) s)))))]))
+
 
 (define pr-t->tag
   (lambda (pr-t)
@@ -285,7 +355,7 @@
     (remp (lambda (c)
             (findf (subsumed-pr? t) c))
       c*)))
- 
+
 (define subsumed-pr?
   (lambda (t)
     (lambda (pr-c)
@@ -350,7 +420,7 @@
                   (else (mzero)))))
              (else (mzero)))))
         (else (mzero))))))
- 
+
 (define verify-c*
   (lambda (c* s)
     (cond
@@ -437,7 +507,7 @@
 (define unify-nonpair
   (lambda (u v s)
     (cond
-      ((eq? u v) s)      
+      ((eq? u v) s)
       ((var? u)
        (and (or (not (pair? v)) (valid? u v s))
          (cons `(,u . ,v) s)))
@@ -456,10 +526,10 @@
     (let ((v (if (var? v) (walk v s) v)))
       (cond
         ((var? v) (eq? v x))
-        ((pair? v) 
+        ((pair? v)
          (or (occurs-check x (car v) s)
              (occurs-check x (cdr v) s)))
-        (else #f)))))  
+        (else #f)))))
 
 (define reify-s
   (lambda (v)
@@ -490,7 +560,7 @@
                         (lambda (c)
                           (anyvar? c r))
                         c*)))
-              (rem-subsumed c*))        
+              (rem-subsumed c*))
             (remp
               (lambda (pr)
                 (var? (walk (lhs pr) r)))
@@ -513,7 +583,7 @@
 (define sorter
   (lambda (ls)
     (my-sort lex<=? ls)))
- 
+
 (define sort-t-vars
   (lambda (pr-t)
     (let ((tag (car pr-t))
@@ -532,7 +602,7 @@
 (define lex<=?
   (lambda (x y)
     (string<=? (datum->string x) (datum->string y))))
-  
+
 (define anyvar?
   (lambda (c r)
     (cond
@@ -555,7 +625,7 @@
 (define unify*
   (lambda (c s)
     (unify (map lhs c) (map rhs c) s)))
- 
+
 (define subsumed?
   (lambda (c c*)
     (cond
@@ -588,24 +658,29 @@
       (else
        (part (pr-t->tag (car t)) t '() '())))))
 
-(define-syntax project 
+(define-syntax project
   (syntax-rules ()
-    ((_ (x ...) g g* ...)  
+    ((_ (x ...) g g* ...)
      (lambdag@ (a : s c* t)
        (let ((x (walk* x s)) ...)
          ((fresh () g g* ...) a))))))
 
 (define-syntax conda
   (syntax-rules ()
-    ((_ (g0 g ...) (g1 g^ ...) ...)
+    ((_) fail)
+    ((_ [g]) g)
+    ((_ [else g]) g)
+    ((_ [else g0 g ...]) (conda [g0 g ...]))
+    ((_ (g0 g ...) b ...)
      (lambdag@ (a)
        (inc
          (ifa ((g0 a) g ...)
-              ((g1 a) g^ ...) ...))))))
+              ((conda b ...) a)))))))
 
 (define-syntax ifa
   (syntax-rules ()
     ((_) (mzero))
+    ((_ g) g)
     ((_ (e g ...) b ...)
      (let loop ((a-inf e))
        (case-inf a-inf
@@ -616,15 +691,20 @@
 
 (define-syntax condu
   (syntax-rules ()
-    ((_ (g0 g ...) (g1 g^ ...) ...)
+    ((_) fail)
+    ((_ [g]) g)
+    ((_ [else g]) g)
+    ((_ [else g0 g ...]) (condu [g0 g ...]))
+    ((_ (g0 g ...) b ...)
      (lambdag@ (a)
        (inc
          (ifu ((g0 a) g ...)
-              ((g1 a) g^ ...) ...))))))
+              ((condu b ...) a)))))))
 
 (define-syntax ifu
   (syntax-rules ()
     ((_) (mzero))
+    ((_ g) g)
     ((_ (e g ...) b ...)
      (let loop ((a-inf e))
        (case-inf a-inf
