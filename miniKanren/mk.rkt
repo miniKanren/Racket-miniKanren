@@ -43,6 +43,11 @@
                  e3)))))))
 (define take
   (lambda (n f)
+    (unless (or (false? n) (natural? n))
+      (raise-arguments-error 'take
+                             "n should be natural number or false."
+                             "n" n))
+
     (cond
       ((and n (zero? n)) '())
       (else
